@@ -12,7 +12,16 @@ declare global {
   var sandboxState: SandboxState;
 }
 
-export async function POST() {
+// Serialize creations: concurrent calls (e.g. React dev double-invoke) would fight over the same Vite port
+let createQueue: Promise<unknown> = Promise.resolve();
+
+export function POST() {
+  const run = createQueue.then(createSandboxHandler, createSandboxHandler);
+  createQueue = run;
+  return run;
+}
+
+async function createSandboxHandler() {
   try {
     console.log('[create-ai-sandbox-v2] Creating sandbox...');
     

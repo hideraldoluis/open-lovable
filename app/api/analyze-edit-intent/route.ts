@@ -13,7 +13,8 @@ const aiGatewayBaseURL = 'https://ai-gateway.vercel.sh/v1';
 
 const groq = createGroq({
   apiKey: process.env.AI_GATEWAY_API_KEY ?? process.env.GROQ_API_KEY,
-  baseURL: isUsingAIGateway ? aiGatewayBaseURL : undefined,
+  // GROQ_BASE_URL lets this point at any OpenAI-compatible server (Ollama, LM Studio...)
+  baseURL: isUsingAIGateway ? aiGatewayBaseURL : process.env.GROQ_BASE_URL,
 });
 
 const anthropic = createAnthropic({

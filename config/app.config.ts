@@ -51,14 +51,16 @@ export const appConfig = {
   // AI Model Configuration
   ai: {
     // Default AI model
-    defaultModel: 'google/gemini-3-pro-preview',
+    defaultModel: process.env.NEXT_PUBLIC_LOCAL_MODEL || 'google/gemini-3-pro-preview',
     
     // Available models
     availableModels: [
       'openai/gpt-5',
       'moonshotai/kimi-k2-instruct-0905',
       'anthropic/claude-sonnet-4-20250514',
-      'google/gemini-3-pro-preview'
+      'google/gemini-3-pro-preview',
+      // Local model served by an OpenAI-compatible server (see GROQ_BASE_URL)
+      ...(process.env.NEXT_PUBLIC_LOCAL_MODEL ? [process.env.NEXT_PUBLIC_LOCAL_MODEL] : [])
     ],
     
     // Model display names

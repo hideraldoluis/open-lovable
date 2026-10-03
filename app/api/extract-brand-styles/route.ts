@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
 
     console.log('[extract-brand-styles] Calling Firecrawl branding API for:', url);
 
-    const firecrawlResponse = await fetch('https://api.firecrawl.dev/v2/scrape', {
+    const firecrawlResponse = await fetch(`${process.env.FIRECRAWL_API_URL || 'https://api.firecrawl.dev'}/v2/scrape`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,

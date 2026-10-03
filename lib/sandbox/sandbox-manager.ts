@@ -160,13 +160,13 @@ class SandboxManager {
   }
 }
 
-// Export singleton instance
-export const sandboxManager = new SandboxManager();
-
 // Also maintain backward compatibility with global state
 declare global {
   var sandboxManager: SandboxManager;
 }
 
-// Ensure the global reference points to our singleton
+// Export singleton instance. Reuse the one on `global` so every route bundle
+// (Next/Turbopack compiles each route separately) shares the same registry.
+export const sandboxManager: SandboxManager = global.sandboxManager ?? new SandboxManager();
+
 global.sandboxManager = sandboxManager;

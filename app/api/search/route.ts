@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Use Firecrawl search to get top 10 results with screenshots
-    const searchResponse = await fetch('https://api.firecrawl.dev/v1/search', {
+    const searchResponse = await fetch(`${process.env.FIRECRAWL_API_URL || 'https://api.firecrawl.dev'}/v1/search`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

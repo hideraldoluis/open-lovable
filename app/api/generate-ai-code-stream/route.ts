@@ -3,7 +3,7 @@ import { createGroq } from '@ai-sdk/groq';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { streamText } from 'ai';
+import { streamText, generateText } from 'ai';
 import type { SandboxState } from '@/types/sandbox';
 import { selectFilesForEdit, getFileContents, formatFilesForAI } from '@/lib/context-selector';
 import { executeSearchPlan, formatSearchResultsForAI, selectTargetFile } from '@/lib/file-search-executor';
@@ -26,7 +26,8 @@ console.log('[generate-ai-code-stream] AI Gateway config:', {
 
 const groq = createGroq({
   apiKey: process.env.AI_GATEWAY_API_KEY ?? process.env.GROQ_API_KEY,
-  baseURL: isUsingAIGateway ? aiGatewayBaseURL : undefined,
+  // GROQ_BASE_URL lets this point at any OpenAI-compatible server (Ollama, LM Studio...)
+  baseURL: isUsingAIGateway ? aiGatewayBaseURL : process.env.GROQ_BASE_URL,
 });
 
 const anthropic = createAnthropic({
@@ -1242,6 +1243,73 @@ MORPH FAST APPLY MODE (EDIT-ONLY):
         console.log(`[generate-ai-code-stream] AI Gateway enabled: ${isUsingAIGateway}`);
         console.log(`[generate-ai-code-stream] Model string: ${model}`);
 
+        // Edits: write a visible plan first, ask about open points, then generate code that follows it
+        let planBlock = '';
+        if (isEdit) {
+          await sendProgress({ type: 'status', message: 'Planning edit...' });
+          try {
+            const recentChat = (global.conversationState?.context.messages || [])
+              .slice(-6)
+              .map(m => `${m.role.toUpperCase()}: ${m.content.slice(0, 1500)}`)
+              .join('\n\n');
+            const planResult = await generateText({
+              model: modelProvider(actualModel),
+              system: `You plan code edits to an existing React/Vite app. Do NOT write code.
+Reply in the user's language. The FIRST line must be exactly one of:
+STATUS: READY
+STATUS: NEEDS_INPUT
+
+Use NEEDS_INPUT when the request leaves open points that would change what gets built (scope, data model, fields, who it applies to, UI or data layer only...). Then list only those questions, numbered and short, and nothing else. Never guess an open point.
+If the recent conversation already answers questions you asked before, do NOT ask them again; use those answers.
+
+Use READY when nothing important is open. Then write a short plan:
+1. What the request means, in one sentence.
+2. Files to change (existing files only unless a new one is truly needed) and what changes in each.
+Use only content already present in the project or given in the conversation. Never propose dummy data, lorem ipsum or invented text.`,
+              prompt: (recentChat ? `RECENT CONVERSATION:
+${recentChat}
+
+` : '') + fullPrompt,
+              maxOutputTokens: 2048,
+            });
+            const raw = planResult.text.trim();
+            const statusMatch = raw.match(/^\s*STATUS:\s*(READY|NEEDS_INPUT)\s*/i);
+            const needsInput = statusMatch?.[1].toUpperCase() === 'NEEDS_INPUT';
+            const plan = raw.replace(/^\s*STATUS:\s*(READY|NEEDS_INPUT)\s*/i, '').trim();
+
+            if (needsInput && plan) {
+              const questions = `**Antes de desenvolver, preciso de alguns detalhes**
+
+${plan}
+
+Responda e eu sigo com o plano e o código.`;
+              global.conversationState?.context.messages.push({
+                id: `msg-${Date.now()}`,
+                role: 'assistant',
+                content: questions,
+                timestamp: Date.now(),
+                metadata: { sandboxId: global.conversationState.context.messages.at(-1)?.metadata?.sandboxId }
+              });
+              await sendProgress({ type: 'conversation', text: questions });
+              // Nothing generated: the client skips applying code when generatedCode is empty
+              await sendProgress({ type: 'complete', generatedCode: '', explanation: '', files: 0, components: 0, model });
+              return;
+            }
+
+            if (plan) {
+              planBlock = `APPROVED EDIT PLAN (follow it; do not invent placeholder data or content not already in the project):
+${plan}
+
+`;
+              await sendProgress({ type: 'conversation', text: `**Plano da edição**
+
+${plan}` });
+            }
+          } catch (planError) {
+            console.error('[generate-ai-code-stream] Edit planning failed, continuing without a plan:', planError);
+          }
+        }
+
         // Make streaming API call with appropriate provider
         const streamOptions: any = {
           model: modelProvider(actualModel),
@@ -1286,7 +1354,7 @@ REMEMBER: It's better to generate fewer COMPLETE files than many INCOMPLETE file
             },
             { 
               role: 'user', 
-              content: fullPrompt + `
+              content: planBlock + fullPrompt + `
 
 CRITICAL: You MUST complete EVERY file you start. If you write:
 <file path="src/components/Hero.jsx">
@@ -1305,7 +1373,7 @@ If you're running out of space, generate FEWER files but make them COMPLETE.
 It's better to have 3 complete files than 10 incomplete files.`
             }
           ],
-          maxTokens: 8192, // Reduce to ensure completion
+          maxOutputTokens: 16384, // Room for complete files
           stopSequences: [] // Don't stop early
           // Note: Neither Groq nor Anthropic models support tool/function calling in this context
           // We use XML tags for package detection instead

@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
       });
     }
     
-    const app = new FirecrawlApp({ apiKey });
+    const app = new FirecrawlApp({ apiKey, apiUrl: process.env.FIRECRAWL_API_URL });
     
     // Scrape the website using the latest SDK patterns
     // Include screenshot if requested in formats

@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
     
-    const app = new FirecrawlApp({ apiKey });
+    const app = new FirecrawlApp({ apiKey, apiUrl: process.env.FIRECRAWL_API_URL });
 
     console.log('[scrape-screenshot] Attempting to capture screenshot for:', url);
     console.log('[scrape-screenshot] Using Firecrawl API key:', apiKey ? 'Present' : 'Missing');

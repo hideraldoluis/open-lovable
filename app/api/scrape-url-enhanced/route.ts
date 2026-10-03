@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Make request to Firecrawl API with maxAge for 500% faster scraping
-    const firecrawlResponse = await fetch('https://api.firecrawl.dev/v1/scrape', {
+    const firecrawlResponse = await fetch(`${process.env.FIRECRAWL_API_URL || 'https://api.firecrawl.dev'}/v1/scrape`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
